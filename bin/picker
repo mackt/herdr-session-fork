@@ -13,7 +13,8 @@ SF_SRC_WS="${SF_SRC_WS:-}"
 SF_TITLE="${SF_TITLE:-}"
 
 # ---- build candidate list ---------------------------------------------------
-# Each line: <kind>\t<target>\t<display>\t<cwd>
+# Each line: <kind>\t<target>\t<display>\t<cwd shown>\t<cwd raw>
+# Column 4 is abbreviated with ~ for display only; column 5 is what we act on.
 #   here  → split beside source pane          target = source pane id
 #   ws    → new tab in an open workspace      target = workspace id
 #   wt    → open a worktree as a workspace    target = checkout path
@@ -49,11 +50,11 @@ while IFS= read -r cwd; do
 done < <(printf '%s\n' "$SF_SRC_CWD"; jq -r '.[].cwd' <<<"$ws_json")
 
 list="$(
-  printf 'here\t%s\t%s\t%s\n' "$SF_SRC_PANE" "$L_SPLIT_HERE" "$SF_SRC_CWD"
+  printf 'here\t%s\t%s\t%s\t%s\n' "$SF_SRC_PANE" "$L_SPLIT_HERE" "$SF_SRC_CWD" "$SF_SRC_CWD"
   jq -r --argjson repos "$repos" --argjson detached "${SHOW_DETACHED_WORKTREES:-0}" --arg home "$HOME" \
         --arg l_new "$L_NEW_WORKTREE" --arg l_hint "$L_NEW_HINT" --arg l_closed "$L_MAIN_CLOSED" --arg l_notopen "$L_NOT_OPEN" '
     def tilde: if startswith($home) then "~" + .[($home|length):] else . end;
-    def wsline($w; $indent): "ws\t\($w.id)\t\($indent)\($w.number). \($w.label)\t\($w.cwd | tilde)";
+    def wsline($w; $indent): "ws\t\($w.id)\t\($indent)\($w.number). \($w.label)\t\($w.cwd | tilde)\t\($w.cwd)";
 
     # cwd → repo_key, from the worktree lists we fetched
     ($repos | map({key: .cwd, value: .source.repo_key}) | from_entries) as $cwd2repo
@@ -73,15 +74,15 @@ list="$(
             | map(select(.is_linked_worktree and (.is_prunable | not) and (($detached == 1) or (.is_detached | not))))
           ) as $children
         | (if ($mains | length) > 0 then ($mains | map(wsline(.; "")))
-           else ["wt\t\($g.source.repo_root)\t\($g.source.repo_name)  \($l_closed)\t\($g.source.repo_root | tilde)"] end)
+           else ["wt\t\($g.source.repo_root)\t\($g.source.repo_name)  \($l_closed)\t\($g.source.repo_root | tilde)\t\($g.source.repo_root)"] end)
         + [ $children[] | . as $c
             | if $c.open_workspace_id then
                 ($ws | map(select(.id == $c.open_workspace_id)) | .[0]) as $cw
                 | if $cw then wsline($cw; "  └ ") else empty end
               else
-                "wt\t\(.path)\t  └ \(.branch // "(detached)")  \($l_notopen)\t\(.path | tilde)"
+                "wt\t\(.path)\t  └ \(.branch // "(detached)")  \($l_notopen)\t\(.path | tilde)\t\(.path)"
               end ]
-        + ["new\t\($g.source.repo_root)\t  └ \($l_new)\t\($g.source.repo_name) · \($l_hint)"];
+        + ["new\t\($g.source.repo_root)\t  └ \($l_new)\t\($g.source.repo_name) · \($l_hint)\t\($g.source.repo_root)"];
 
     # walk workspaces in number order; a repo group is emitted where its first workspace sits
     reduce ($ws | sort_by(.number))[] as $w ({emitted: {}, lines: []};
@@ -143,7 +144,7 @@ case "$kind" in
     dst_cwd="$SF_SRC_CWD"
     ;;
   ws)
-    dst_cwd="$(cut -f4 <<<"$choice")"
+    dst_cwd="$(cut -f5 <<<"$choice")"
     [[ -n "$dst_cwd" ]] || dst_cwd="$SF_SRC_CWD"
     out="$(herdr_json tab create --workspace "$target" --cwd "$dst_cwd" --focus)" || die "tab create 失败: $out"
     dst_pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"
