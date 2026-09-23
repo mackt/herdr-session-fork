@@ -23,15 +23,16 @@ SF_TITLE="${SF_TITLE:-}"
 # repo's linked worktrees (open or not) indented beneath, then "new worktree".
 snap="$("$HERDR" api snapshot 2>/dev/null)" || die "herdr api snapshot 失败"
 
-# workspace → representative cwd (pane in active tab first)
+# workspace → its directory: the worktree checkout it was opened on when known,
+# otherwise the most common pane cwd (a stray pane that cd'ed away must not win)
 ws_json="$(jq -c '
   .result.snapshot as $s
   | [ $s.workspaces[]
       | . as $w
-      | ([$s.panes[] | select(.workspace_id==$w.workspace_id)]
-         | sort_by(if .tab_id==$w.active_tab_id then 0 else 1 end)
-         | .[0].cwd // "") as $cwd
-      | {id: $w.workspace_id, number: $w.number, label: $w.label, cwd: $cwd,
+      | ([$s.panes[] | select(.workspace_id==$w.workspace_id) | .cwd // empty]
+         | group_by(.) | sort_by(-length) | .[0][0] // "") as $common
+      | {id: $w.workspace_id, number: $w.number, label: $w.label,
+         cwd: ($w.worktree.checkout_path // $common),
          repo_key: ($w.worktree.repo_key // null)} ]
 ' <<<"$snap")"
 
