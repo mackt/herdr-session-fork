@@ -1,6 +1,8 @@
-# Session Fork — Herdr plugin
+# herdr-session-fork
 
-[中文说明](README.zh-CN.md)
+<p align="center">
+  English · <a href="README.zh-CN.md">简体中文</a>
+</p>
 
 Fork the focused **Claude Code**, **Codex**, **Pi** or **Grok** conversation
 into somewhere else in Herdr, picked from a fuzzy list. Press one key in the

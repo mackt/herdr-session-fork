@@ -1,6 +1,8 @@
-# Session Fork — Herdr 插件
+# herdr-session-fork
 
-[English](README.md)
+<p align="center">
+  <a href="README.md">English</a> · 简体中文
+</p>
 
 把当前 pane 里的 **Claude Code / Codex / Pi / Grok** 对话 fork 到 Herdr 的另一个
 地方。在 agent 的 pane 里按一个键，从模糊列表里选目的地：
