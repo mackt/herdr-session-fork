@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Action entry: resolve the focused agent pane, validate it, open the picker popup.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+# shellcheck disable=SC1091
+source lib/common.sh
+
+command -v jq >/dev/null 2>&1 || die "jq is required"
+
+ctx="${HERDR_PLUGIN_CONTEXT_JSON:-{}}"
+log "action fork ctx=$ctx"
+
+# Pane precedence: explicit HERDR_PANE_ID, then context focused pane, then session focus.
+src_pane="${HERDR_PANE_ID:-}"
+[[ -n "$src_pane" ]] || src_pane="$(jq -r '.focused_pane_id // .pane_id // .pane.pane_id // empty' <<<"$ctx")"
+[[ -n "$src_pane" ]] || src_pane="$("$HERDR" api snapshot 2>/dev/null | jq -r '.result.snapshot.focused_pane_id // empty')"
+[[ -n "$src_pane" ]] || die "无法确定当前 pane"
+
+pane="$(pane_info "$src_pane")" || die "herdr pane get $src_pane 失败"
+kind="$(jq -r '.agent // empty' <<<"$pane")"
+sid="$(jq -r '.agent_session.value // empty' <<<"$pane")"
+src_cwd="$(jq -r '.foreground_cwd // .cwd // empty' <<<"$pane")"
+src_ws="$(jq -r '.workspace_id // empty' <<<"$pane")"
+title="$(jq -r '.terminal_title_stripped // .terminal_title // empty' <<<"$pane")"
+
+case "$kind" in
+  claude|codex|pi|grok) ;;
+  "") die "当前 pane 没有检测到 agent" ;;
+  *) die "暂不支持 fork $kind 会话（支持 claude / codex / pi / grok）" ;;
+esac
+sid_guessed=0
+if [[ -z "$sid" && "$kind" == codex ]]; then
+  # Codex reports its id through hook events; before the first one fires, fall back
+  # to the newest rollout file whose session_meta.cwd matches this pane.
+  sid="$(codex_session_for_cwd "$src_cwd" || true)"
+  [[ -n "$sid" ]] && sid_guessed=1
+fi
+[[ -n "$sid" ]] || die "herdr 还没拿到这个 $kind 会话的 session id（integration 装了吗？）"
+(( sid_guessed )) && notify "session-fork" "codex session id 是按目录猜的：${sid:0:8}…"
+
+log "source pane=$src_pane kind=$kind sid=$sid cwd=$src_cwd ws=$src_ws"
+
+exec "$HERDR" plugin pane open \
+  --plugin "$PLUGIN_ID" --entrypoint picker --focus \
+  --env "SF_SRC_PANE=$src_pane" \
+  --env "SF_SRC_WS=$src_ws" \
+  --env "SF_KIND=$kind" \
+  --env "SF_SID=$sid" \
+  --env "SF_SRC_CWD=$src_cwd" \
+  --env "SF_TITLE=$title"

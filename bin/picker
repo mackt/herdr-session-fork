@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# Picker (runs inside the popup): choose a destination, then fork the session there.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+# shellcheck disable=SC1091
+source lib/common.sh
+
+command -v fzf >/dev/null 2>&1 || die "fzf is required (brew install fzf)"
+command -v jq  >/dev/null 2>&1 || die "jq is required"
+
+: "${SF_SRC_PANE:?}" "${SF_KIND:?}" "${SF_SID:?}" "${SF_SRC_CWD:?}"
+SF_SRC_WS="${SF_SRC_WS:-}"
+SF_TITLE="${SF_TITLE:-}"
+
+# ---- build candidate list ---------------------------------------------------
+# Each line: <kind>\t<target>\t<display>\t<cwd>
+#   here  → split beside source pane          target = source pane id
+#   ws    → new tab in an open workspace      target = workspace id
+#   wt    → open a worktree as a workspace    target = checkout path
+#   new   → create a worktree in a repo       target = repo root
+# Workspaces are grouped per git repo: main-checkout workspaces on top, the
+# repo's linked worktrees (open or not) indented beneath, then "new worktree".
+snap="$("$HERDR" api snapshot 2>/dev/null)" || die "herdr api snapshot 失败"
+
+# workspace → representative cwd (pane in active tab first)
+ws_json="$(jq -c '
+  .result.snapshot as $s
+  | [ $s.workspaces[]
+      | . as $w
+      | ([$s.panes[] | select(.workspace_id==$w.workspace_id)]
+         | sort_by(if .tab_id==$w.active_tab_id then 0 else 1 end)
+         | .[0].cwd // "") as $cwd
+      | {id: $w.workspace_id, number: $w.number, label: $w.label, cwd: $cwd,
+         repo_key: ($w.worktree.repo_key // null)} ]
+' <<<"$snap")"
+
+# one `worktree list` per distinct workspace cwd (plus the source cwd); non-git cwds are skipped
+repos="[]"
+seen_cwds=""
+while IFS= read -r cwd; do
+  [[ -n "$cwd" ]] || continue
+  case "$seen_cwds" in *"|$cwd|"*) continue ;; esac
+  seen_cwds="$seen_cwds|$cwd|"
+  wt_json="$("$HERDR" worktree list --cwd "$cwd" 2>/dev/null || true)"
+  if [[ -n "$wt_json" ]] && jq -e '.result.worktrees' <<<"$wt_json" >/dev/null 2>&1; then
+    repos="$(jq -c --arg cwd "$cwd" --argjson wt "$wt_json" \
+      '. + [ ($wt.result | {cwd: $cwd, source, worktrees: (.worktrees // [])}) ]' <<<"$repos")"
+  fi
+done < <(printf '%s\n' "$SF_SRC_CWD"; jq -r '.[].cwd' <<<"$ws_json")
+
+list="$(
+  printf 'here\t%s\t↔ 当前 workspace 分屏\t%s\n' "$SF_SRC_PANE" "$SF_SRC_CWD"
+  jq -r --argjson repos "$repos" --argjson detached "${SHOW_DETACHED_WORKTREES:-0}" --arg home "$HOME" '
+    def tilde: if startswith($home) then "~" + .[($home|length):] else . end;
+    def wsline($w; $indent): "ws\t\($w.id)\t\($indent)\($w.number). \($w.label)\t\($w.cwd | tilde)";
+
+    # cwd → repo_key, from the worktree lists we fetched
+    ($repos | map({key: .cwd, value: .source.repo_key}) | from_entries) as $cwd2repo
+    | ($repos | map({key: .source.repo_key, value: .}) | from_entries) as $group
+    | [ .[] | .repo_key = (.repo_key // $cwd2repo[.cwd] // null)
+             | .repo_root = (if .repo_key then $group[.repo_key].source.repo_root else null end)
+             | . as $x
+             | .linked = ($x.repo_root != null and $x.cwd != $x.repo_root
+                          and (($x.cwd | startswith($x.repo_root + "/")) | not)) ]
+      as $ws
+    # lines for one repo group: main-checkout workspaces (or an "open main" header),
+    # then its linked worktrees (open → workspace, else openable), then "new worktree"
+    | def group_lines($key):
+        $group[$key] as $g
+        | ($ws | map(select(.repo_key == $key and (.linked | not))) | sort_by(.number)) as $mains
+        | ($g.worktrees
+            | map(select(.is_linked_worktree and (.is_prunable | not) and (($detached == 1) or (.is_detached | not))))
+          ) as $children
+        | (if ($mains | length) > 0 then ($mains | map(wsline(.; "")))
+           else ["wt\t\($g.source.repo_root)\t\($g.source.repo_name)  ·主检出，未打开\t\($g.source.repo_root | tilde)"] end)
+        + [ $children[] | . as $c
+            | if $c.open_workspace_id then
+                ($ws | map(select(.id == $c.open_workspace_id)) | .[0]) as $cw
+                | if $cw then wsline($cw; "  └ ") else empty end
+              else
+                "wt\t\(.path)\t  └ \(.branch // "(detached)")  ·未打开\t\(.path | tilde)"
+              end ]
+        + ["new\t\($g.source.repo_root)\t  └ ＋ 新建 worktree\t\($g.source.repo_name) · 输入分支名"];
+
+    # walk workspaces in number order; a repo group is emitted where its first workspace sits
+    reduce ($ws | sort_by(.number))[] as $w ({emitted: {}, lines: []};
+        if $w.repo_key == null then .lines += [wsline($w; "")]
+        elif .emitted[$w.repo_key] then .
+        else .emitted[$w.repo_key] = true | .lines += group_lines($w.repo_key) end)
+    # repos with no open workspace at all (e.g. the source pane sits in a worktree
+    # of a repo whose workspaces are all closed) still get their group
+    | reduce ($repos | map(.source.repo_key) | unique)[] as $k (.;
+        if .emitted[$k] then . else .emitted[$k] = true | .lines += group_lines($k) end)
+    | .lines[]
+  ' <<<"$ws_json"
+)"
+
+# pad the display column by terminal width (CJK/fullwidth = 2 cells) so cwd lines up in fzf
+list="$(jq -R -r '
+  # ≥ U+2E80 (CJK, fullwidth forms) = 2 cells; box-drawing/arrows below that render as 1
+  def dw: [explode[] | if . >= 11904 then 2 else 1 end] | add // 0;
+  split("\t") | .[2] |= (. + (" " * ([44 - dw, 1] | max))) | join("\t")
+' <<<"$list")"
+
+# SF_DRY_LIST=1: print the candidate list and exit (debugging without the popup).
+if [[ "${SF_DRY_LIST:-0}" == 1 ]]; then
+  printf '%s\n' "$list"
+  exit 0
+fi
+
+header="fork $SF_KIND 会话 ${SF_TITLE:+· $SF_TITLE }→ 目的地"
+choice="$(
+  fzf --delimiter '\t' --with-nth 3,4 --tabstop 4 --ansi \
+      --header "$header" --prompt '目的地 > ' \
+      --layout reverse --no-multi --cycle \
+      --preview-window hidden \
+      <<<"$list"
+)" || { log "picker cancelled"; exit 0; }
+
+kind="$(cut -f1 <<<"$choice")"
+target="$(cut -f2 <<<"$choice")"
+log "picked kind=$kind target=$target"
+
+# ---- resolve a destination pane at a shell prompt --------------------------
+dst_pane=""
+dst_cwd=""
+
+case "$kind" in
+  here)
+    # split beside source, direction from geometry (wide → right)
+    dir=right
+    layout="$("$HERDR" pane layout --pane "$SF_SRC_PANE" 2>/dev/null || true)"
+    if [[ -n "$layout" ]]; then
+      read -r w h < <(jq -r --arg p "$SF_SRC_PANE" '
+        .result.layout.panes[] | select(.pane_id==$p) | "\(.rect.width) \(.rect.height)"' <<<"$layout" | head -1)
+      if [[ "${w:-}" =~ ^[0-9]+$ && "${h:-}" =~ ^[0-9]+$ ]] && (( w < h * 5 / 4 )); then dir=down; fi
+    fi
+    args=(pane split --pane "$SF_SRC_PANE" --direction "$dir" --cwd "$SF_SRC_CWD" --focus)
+    [[ -n "$SPLIT_RATIO" ]] && args+=(--ratio "$SPLIT_RATIO")
+    out="$(herdr_json "${args[@]}")" || die "pane split 失败: $out"
+    dst_pane="$(jq -r '.result.pane.pane_id // empty' <<<"$out")"
+    dst_cwd="$SF_SRC_CWD"
+    ;;
+  ws)
+    dst_cwd="$(cut -f4 <<<"$choice")"
+    [[ -n "$dst_cwd" ]] || dst_cwd="$SF_SRC_CWD"
+    out="$(herdr_json tab create --workspace "$target" --cwd "$dst_cwd" --focus)" || die "tab create 失败: $out"
+    dst_pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"
+    [[ -n "$dst_pane" ]] || dst_pane="$(find_shell_pane_in_workspace "$target" 15)" || die "在 workspace $target 里没找到空闲 shell pane"
+    ;;
+  wt)
+    dst_cwd="$target"
+    out="$(herdr_json worktree open --cwd "$SF_SRC_CWD" --path "$target" --focus)" || die "worktree open 失败: $out"
+    dst_pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"
+    if [[ -z "$dst_pane" ]]; then
+      ws_id="$(jq -r '.result.workspace.workspace_id // empty' <<<"$out")"
+      [[ -n "$ws_id" ]] || die "worktree open 没有返回 workspace: $out"
+      dst_pane="$(find_shell_pane_in_workspace "$ws_id" 20)" || die "workspace $ws_id 里没找到空闲 shell pane"
+    fi
+    ;;
+  new)
+    printf '\n  在 %s 新建 worktree，分支名（基于该仓库 HEAD，留空取消）: ' "$target"
+    read -r branch
+    [[ -n "$branch" ]] || { log "new worktree cancelled"; exit 0; }
+    out="$(herdr_json worktree create --cwd "$target" --branch "$branch" --focus)" || die "worktree create 失败: $out"
+    dst_pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"
+    dst_cwd="$(jq -r '.result.worktree.path // .result.root_pane.cwd // empty' <<<"$out")"
+    [[ -n "$dst_pane" && -n "$dst_cwd" ]] || die "worktree create 返回缺少 pane/path: $out"
+    ;;
+  *) die "未知目标类型 $kind" ;;
+esac
+
+log "destination pane=$dst_pane cwd=$dst_cwd"
+
+# ---- fork -------------------------------------------------------------------
+name="$(alloc_agent_name)" || die "无法分配 agent 名称"
+printf '\n  启动 %s --fork %s → %s …\n' "$SF_KIND" "${SF_SID:0:8}" "$dst_pane"
+start_forked_agent "$dst_pane" "$SF_KIND" "$SF_SID" "$name" "$dst_cwd" || die "agent start 失败（pane $dst_pane 保留，可手动处理）"
+
+if [[ "$NOTE_ON_FORK" == 1 && "$dst_cwd" != "$SF_SRC_CWD" ]]; then
+  note="$(render_note "$SF_SRC_CWD" "$dst_cwd")"
+  "$HERDR" agent prompt "$name" "$note" >/dev/null 2>&1 || log "note prompt failed"
+fi
+
+"$HERDR" agent focus "$name" >/dev/null 2>&1 || "$HERDR" pane focus --pane "$dst_pane" >/dev/null 2>&1 || true
+notify "session-fork ready" "$SF_KIND → $dst_pane ($name)" done
+log "done: $name in $dst_pane"

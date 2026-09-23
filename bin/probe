@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Debug helper: capture the runtime env and context JSON Herdr hands a plugin action.
+set -euo pipefail
+out="${HERDR_PLUGIN_STATE_DIR:-/tmp}/probe.txt"
+{
+  env | grep -E '^HERDR_' | grep -v CONTEXT_JSON | sort
+  echo
+  echo "HERDR_PLUGIN_CONTEXT_JSON:"
+  printf '%s\n' "${HERDR_PLUGIN_CONTEXT_JSON:-}" | jq . 2>/dev/null || printf '%s\n' "${HERDR_PLUGIN_CONTEXT_JSON:-}"
+} > "$out"
+"${HERDR_BIN_PATH:-herdr}" notification show "session-fork probe" --body "wrote $out" >/dev/null 2>&1 || true

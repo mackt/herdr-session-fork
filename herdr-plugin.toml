@@ -1,0 +1,32 @@
+id = "mackt.session-fork"
+name = "Session Fork"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+description = "Fork the focused Claude Code or Codex session into another workspace, an existing worktree, or a brand-new worktree, picked from a fuzzy list."
+platforms = ["macos", "linux"]
+
+# fork — entry point. Validates the focused pane is a Claude/Codex session with a
+# known id, then opens the picker popup with the source details in its env.
+[[actions]]
+id = "fork"
+title = "Fork agent session to…"
+contexts = ["workspace", "tab", "pane"]
+command = ["bin/session-fork"]
+
+# picker — fzf UI inside a session-modal popup. Lists open workspaces, unopened
+# worktrees of the source repo, "split here", and "new worktree"; then performs
+# the fork in the chosen destination.
+[[panes]]
+id = "picker"
+title = "Fork session to…"
+placement = "popup"
+width = "72%"
+height = "60%"
+command = ["bin/picker"]
+
+# probe — debugging aid: dumps env + context JSON to HERDR_PLUGIN_STATE_DIR/probe.json
+[[actions]]
+id = "probe"
+title = "Session Fork: dump context (debug)"
+contexts = ["workspace", "tab", "pane"]
+command = ["bin/probe"]
