@@ -49,8 +49,9 @@ while IFS= read -r cwd; do
 done < <(printf '%s\n' "$SF_SRC_CWD"; jq -r '.[].cwd' <<<"$ws_json")
 
 list="$(
-  printf 'here\t%s\t↔ 当前 workspace 分屏\t%s\n' "$SF_SRC_PANE" "$SF_SRC_CWD"
-  jq -r --argjson repos "$repos" --argjson detached "${SHOW_DETACHED_WORKTREES:-0}" --arg home "$HOME" '
+  printf 'here\t%s\t%s\t%s\n' "$SF_SRC_PANE" "$L_SPLIT_HERE" "$SF_SRC_CWD"
+  jq -r --argjson repos "$repos" --argjson detached "${SHOW_DETACHED_WORKTREES:-0}" --arg home "$HOME" \
+        --arg l_new "$L_NEW_WORKTREE" --arg l_hint "$L_NEW_HINT" --arg l_closed "$L_MAIN_CLOSED" --arg l_notopen "$L_NOT_OPEN" '
     def tilde: if startswith($home) then "~" + .[($home|length):] else . end;
     def wsline($w; $indent): "ws\t\($w.id)\t\($indent)\($w.number). \($w.label)\t\($w.cwd | tilde)";
 
@@ -72,15 +73,15 @@ list="$(
             | map(select(.is_linked_worktree and (.is_prunable | not) and (($detached == 1) or (.is_detached | not))))
           ) as $children
         | (if ($mains | length) > 0 then ($mains | map(wsline(.; "")))
-           else ["wt\t\($g.source.repo_root)\t\($g.source.repo_name)  ·主检出，未打开\t\($g.source.repo_root | tilde)"] end)
+           else ["wt\t\($g.source.repo_root)\t\($g.source.repo_name)  \($l_closed)\t\($g.source.repo_root | tilde)"] end)
         + [ $children[] | . as $c
             | if $c.open_workspace_id then
                 ($ws | map(select(.id == $c.open_workspace_id)) | .[0]) as $cw
                 | if $cw then wsline($cw; "  └ ") else empty end
               else
-                "wt\t\(.path)\t  └ \(.branch // "(detached)")  ·未打开\t\(.path | tilde)"
+                "wt\t\(.path)\t  └ \(.branch // "(detached)")  \($l_notopen)\t\(.path | tilde)"
               end ]
-        + ["new\t\($g.source.repo_root)\t  └ ＋ 新建 worktree\t\($g.source.repo_name) · 输入分支名"];
+        + ["new\t\($g.source.repo_root)\t  └ \($l_new)\t\($g.source.repo_name) · \($l_hint)"];
 
     # walk workspaces in number order; a repo group is emitted where its first workspace sits
     reduce ($ws | sort_by(.number))[] as $w ({emitted: {}, lines: []};
@@ -108,10 +109,10 @@ if [[ "${SF_DRY_LIST:-0}" == 1 ]]; then
   exit 0
 fi
 
-header="fork $SF_KIND 会话 ${SF_TITLE:+· $SF_TITLE }→ 目的地"
+header="$(printf "$L_HEADER" "$SF_KIND" "${SF_TITLE:+ · $SF_TITLE}")"
 choice="$(
   fzf --delimiter '\t' --with-nth 3,4 --tabstop 4 --ansi \
-      --header "$header" --prompt '目的地 > ' \
+      --header "$header" --prompt "$L_PROMPT" \
       --layout reverse --no-multi --cycle \
       --preview-window hidden \
       <<<"$list"
@@ -159,7 +160,7 @@ case "$kind" in
     fi
     ;;
   new)
-    printf '\n  在 %s 新建 worktree，分支名（基于该仓库 HEAD，留空取消）: ' "$target"
+    printf "\n$L_ASK_BRANCH" "$target"
     read -r branch
     [[ -n "$branch" ]] || { log "new worktree cancelled"; exit 0; }
     out="$(herdr_json worktree create --cwd "$target" --branch "$branch" --focus)" || die "worktree create 失败: $out"
@@ -174,7 +175,7 @@ log "destination pane=$dst_pane cwd=$dst_cwd"
 
 # ---- fork -------------------------------------------------------------------
 name="$(alloc_agent_name)" || die "无法分配 agent 名称"
-printf '\n  启动 %s --fork %s → %s …\n' "$SF_KIND" "${SF_SID:0:8}" "$dst_pane"
+printf "\n$L_STARTING\n" "$SF_KIND" "${SF_SID:0:8}" "$dst_pane"
 start_forked_agent "$dst_pane" "$SF_KIND" "$SF_SID" "$name" "$dst_cwd" || die "agent start 失败（pane $dst_pane 保留，可手动处理）"
 
 if [[ "$NOTE_ON_FORK" == 1 && "$dst_cwd" != "$SF_SRC_CWD" ]]; then
@@ -183,5 +184,5 @@ if [[ "$NOTE_ON_FORK" == 1 && "$dst_cwd" != "$SF_SRC_CWD" ]]; then
 fi
 
 "$HERDR" agent focus "$name" >/dev/null 2>&1 || "$HERDR" pane focus --pane "$dst_pane" >/dev/null 2>&1 || true
-notify "session-fork ready" "$SF_KIND → $dst_pane ($name)" done
+notify "$L_DONE_TITLE" "$SF_KIND → $dst_pane ($name)" done
 log "done: $name in $dst_pane"

@@ -14,7 +14,7 @@ log "action fork ctx=$ctx"
 src_pane="${HERDR_PANE_ID:-}"
 [[ -n "$src_pane" ]] || src_pane="$(jq -r '.focused_pane_id // .pane_id // .pane.pane_id // empty' <<<"$ctx")"
 [[ -n "$src_pane" ]] || src_pane="$("$HERDR" api snapshot 2>/dev/null | jq -r '.result.snapshot.focused_pane_id // empty')"
-[[ -n "$src_pane" ]] || die "无法确定当前 pane"
+[[ -n "$src_pane" ]] || die "$L_ERR_NO_PANE"
 
 pane="$(pane_info "$src_pane")" || die "herdr pane get $src_pane 失败"
 kind="$(jq -r '.agent // empty' <<<"$pane")"
@@ -25,8 +25,8 @@ title="$(jq -r '.terminal_title_stripped // .terminal_title // empty' <<<"$pane"
 
 case "$kind" in
   claude|codex|pi|grok) ;;
-  "") die "当前 pane 没有检测到 agent" ;;
-  *) die "暂不支持 fork $kind 会话（支持 claude / codex / pi / grok）" ;;
+  "") die "$L_ERR_NO_AGENT" ;;
+  *) die "$(printf "$L_ERR_UNSUPPORTED" "$kind")" ;;
 esac
 sid_guessed=0
 if [[ -z "$sid" && "$kind" == codex ]]; then
@@ -35,8 +35,8 @@ if [[ -z "$sid" && "$kind" == codex ]]; then
   sid="$(codex_session_for_cwd "$src_cwd" || true)"
   [[ -n "$sid" ]] && sid_guessed=1
 fi
-[[ -n "$sid" ]] || die "herdr 还没拿到这个 $kind 会话的 session id（integration 装了吗？）"
-(( sid_guessed )) && notify "session-fork" "codex session id 是按目录猜的：${sid:0:8}…"
+[[ -n "$sid" ]] || die "$(printf "$L_ERR_NO_SID" "$kind")"
+(( sid_guessed )) && notify "session-fork" "$(printf "$L_SID_GUESSED" "${sid:0:8}")"
 
 log "source pane=$src_pane kind=$kind sid=$sid cwd=$src_cwd ws=$src_ws"
 
