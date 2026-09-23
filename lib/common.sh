@@ -14,6 +14,7 @@ NOTE_ON_FORK=1
 NOTE_TEMPLATE='This session was forked from {src_cwd}; the working directory is now {dst_cwd}. Relative paths and branches mentioned earlier refer to the old directory — use the current one from here on.'
 SPLIT_RATIO=""
 SHOW_DETACHED_WORKTREES=0
+STARTUP_PROMPT_TIMEOUT_MS=300000   # how long to wait for the user to answer a startup prompt (e.g. trust dialog)
 UI_LANG=""                  # zh | en; empty → from $LANG
 if [[ -n "$CONFIG_DIR" && -f "$CONFIG_DIR/config.sh" ]]; then
   # shellcheck disable=SC1091
@@ -40,6 +41,9 @@ if [[ "$UI_LANG" == zh ]]; then
   L_ERR_UNSUPPORTED='暂不支持 fork %s 会话（支持 claude / codex / pi / grok）'
   L_ERR_NO_SID='herdr 还没拿到这个 %s 会话的 session id（integration 装了吗？）'
   L_SID_GUESSED='codex session id 是按目录猜的：%s…'
+  L_TRUST_TITLE='需要你确认'
+  L_TRUST_BODY='%s 第一次进入 %s，请在 pane 里确认信任该目录'
+  L_BLOCKED_BODY='%s 启动时停在了一个提示上，请到 pane %s 处理'
 else
   L_SPLIT_HERE='↔ split in current workspace'
   L_NEW_WORKTREE='＋ new worktree'
@@ -56,6 +60,9 @@ else
   L_ERR_UNSUPPORTED='forking %s sessions is not supported (claude / codex / pi / grok)'
   L_ERR_NO_SID='Herdr has no session id for this %s pane yet (is the integration installed?)'
   L_SID_GUESSED='codex session id guessed from cwd: %s…'
+  L_TRUST_TITLE='Action needed'
+  L_TRUST_BODY='%s is entering %s for the first time — confirm the trust prompt in the pane'
+  L_BLOCKED_BODY='%s stopped at a prompt during startup — see pane %s'
 fi
 
 mkdir -p "$STATE_DIR" 2>/dev/null || true
@@ -192,10 +199,37 @@ start_forked_agent() {
       sleep 0.4
       continue
     fi
+    if [[ "$out" == *agent_not_ready* ]]; then
+      # The agent is up but stopped at a startup prompt (typically Claude's
+      # "trust this folder?"). Herdr already bound $name to the pane, so hand the
+      # prompt to the user and wait for the agent to settle.
+      wait_through_startup_prompt "$pane" "$kind" "$name" "$dst_cwd" && return 0
+      return 1
+    fi
     printf '%s\n' "$out" >&2
     return 1
   done
   printf '%s\n' "$out" >&2
+  return 1
+}
+
+# Notify the user about a startup prompt in <pane>, focus it, wait until the agent is idle.
+wait_through_startup_prompt() {
+  local pane="$1" kind="$2" name="$3" dst_cwd="$4" screen body
+  screen="$("$HERDR" pane read "$pane" 2>/dev/null || true)"
+  if grep -qi 'trust this folder' <<<"$screen"; then
+    body="$(printf "$L_TRUST_BODY" "$kind" "$dst_cwd")"
+  else
+    body="$(printf "$L_BLOCKED_BODY" "$kind" "$pane")"
+  fi
+  log "startup prompt in $pane: $body"
+  notify "$L_TRUST_TITLE" "$body" request
+  "$HERDR" pane focus --pane "$pane" >/dev/null 2>&1 || true
+  if "$HERDR" agent wait "$name" --until idle --timeout "${STARTUP_PROMPT_TIMEOUT_MS:-300000}" >/dev/null 2>&1; then
+    log "agent $name ready after startup prompt"
+    return 0
+  fi
+  log "agent $name never became idle after startup prompt"
   return 1
 }
 

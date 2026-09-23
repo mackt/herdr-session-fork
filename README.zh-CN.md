@@ -87,6 +87,7 @@ NOTE_ON_FORK=1               # 0 = 不发「工作目录已切换」那句说明
 NOTE_TEMPLATE="…"            # 自定义说明（默认英文，不随 UI_LANG 变）；{src_cwd} 和 {dst_cwd} 会被替换
 SPLIT_RATIO=""               # 例如 0.5，用于「分屏」目标
 SHOW_DETACHED_WORKTREES=0    # 1 = 也列出 detached HEAD 的 worktree
+STARTUP_PROMPT_TIMEOUT_MS=300000  # 等你处理启动提示的最长时间
 ```
 
 ## 工作原理
@@ -110,6 +111,8 @@ picker 用 `herdr api snapshot` 加上每个不同 workspace 目录一次 `herdr
 - Codex 的 session id 靠 hook 事件上报。Herdr 还没收到时，插件会退而找 `cwd`
   与该 pane 相同的最新 Codex rollout 文件，并用通知提示这是猜的。
 - Grok 不传 `--cwd` 的话会把 fork 出来的会话钉在源目录，所以插件总是传目的地。
+- agent 启动时停在提示上（比如 Claude Code 第一次进入某个目录时的「是否信任该目录」），
+  插件会发通知、聚焦那个 pane，等你处理完再继续完成交接。
 - 新增 agent 只需在 `lib/common.sh` 的 `start_forked_agent` 加一个 `case`
   分支，再把它加进 `bin/session-fork` 的白名单，前提是该 agent 的 CLI 支持按 id
   fork 会话。

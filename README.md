@@ -92,6 +92,7 @@ NOTE_ON_FORK=1               # 0 = do not send the "cwd changed" note
 NOTE_TEMPLATE="…"            # custom note (English by default); {src_cwd} and {dst_cwd} are substituted
 SPLIT_RATIO=""               # e.g. 0.5, for the split-here target
 SHOW_DETACHED_WORKTREES=0    # 1 = also list detached-HEAD worktrees
+STARTUP_PROMPT_TIMEOUT_MS=300000  # how long to wait for you to answer a startup prompt
 ```
 
 ## How it works
@@ -120,6 +121,9 @@ Logs: `herdr plugin log list --plugin mackt.session-fork` and
   matches the pane and says so in a notification.
 - Grok pins a forked session to the source directory unless `--cwd` is given,
   so the plugin always passes the destination.
+- If the agent stops at a startup prompt (Claude Code's "trust this folder?"
+  on a directory it has not seen before), the plugin sends a notification,
+  focuses the pane and waits for you to answer, then finishes the handoff.
 - Adding another agent is a `case` branch in `start_forked_agent`
   (`lib/common.sh`) plus the allow-list in `bin/session-fork`, provided the
   agent's CLI can fork a session by id.
