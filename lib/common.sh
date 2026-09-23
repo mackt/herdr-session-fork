@@ -10,7 +10,8 @@ LOG_FILE="$STATE_DIR/session-fork.log"
 # ---- user config (optional) -------------------------------------------------
 # $HERDR_PLUGIN_CONFIG_DIR/config.sh may override these.
 NOTE_ON_FORK=1
-NOTE_TEMPLATE=""            # empty → language default below
+# The note is a prompt for the agent, not UI: always English regardless of UI_LANG.
+NOTE_TEMPLATE='This session was forked from {src_cwd}; the working directory is now {dst_cwd}. Relative paths and branches mentioned earlier refer to the old directory — use the current one from here on.'
 SPLIT_RATIO=""
 SHOW_DETACHED_WORKTREES=0
 UI_LANG=""                  # zh | en; empty → from $LANG
@@ -39,7 +40,6 @@ if [[ "$UI_LANG" == zh ]]; then
   L_ERR_UNSUPPORTED='暂不支持 fork %s 会话（支持 claude / codex / pi / grok）'
   L_ERR_NO_SID='herdr 还没拿到这个 %s 会话的 session id（integration 装了吗？）'
   L_SID_GUESSED='codex session id 是按目录猜的：%s…'
-  [[ -n "$NOTE_TEMPLATE" ]] || NOTE_TEMPLATE='这个会话是从 {src_cwd} fork 过来的，现在的工作目录是 {dst_cwd}。之前对话里提到的相对路径和分支都指旧目录，后续操作请以当前目录为准。'
 else
   L_SPLIT_HERE='↔ split in current workspace'
   L_NEW_WORKTREE='＋ new worktree'
@@ -56,7 +56,6 @@ else
   L_ERR_UNSUPPORTED='forking %s sessions is not supported (claude / codex / pi / grok)'
   L_ERR_NO_SID='Herdr has no session id for this %s pane yet (is the integration installed?)'
   L_SID_GUESSED='codex session id guessed from cwd: %s…'
-  [[ -n "$NOTE_TEMPLATE" ]] || NOTE_TEMPLATE='This session was forked from {src_cwd}; the working directory is now {dst_cwd}. Relative paths and branches mentioned earlier refer to the old directory — use the current one from here on.'
 fi
 
 mkdir -p "$STATE_DIR" 2>/dev/null || true

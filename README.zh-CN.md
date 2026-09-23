@@ -84,7 +84,7 @@ Herdr 的 action 菜单里也能找到这个 action。
 ```bash
 UI_LANG=""                   # "en" 或 "zh"；留空跟随 $LANG
 NOTE_ON_FORK=1               # 0 = 不发「工作目录已切换」那句说明
-NOTE_TEMPLATE=""             # 自定义说明；{src_cwd} 和 {dst_cwd} 会被替换
+NOTE_TEMPLATE="…"            # 自定义说明（默认英文，不随 UI_LANG 变）；{src_cwd} 和 {dst_cwd} 会被替换
 SPLIT_RATIO=""               # 例如 0.5，用于「分屏」目标
 SHOW_DETACHED_WORKTREES=0    # 1 = 也列出 detached HEAD 的 worktree
 ```

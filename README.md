@@ -89,7 +89,7 @@ sourced by every run:
 ```bash
 UI_LANG=""                   # "en" or "zh"; empty = follow $LANG
 NOTE_ON_FORK=1               # 0 = do not send the "cwd changed" note
-NOTE_TEMPLATE=""             # custom note; {src_cwd} and {dst_cwd} are substituted
+NOTE_TEMPLATE="…"            # custom note (English by default); {src_cwd} and {dst_cwd} are substituted
 SPLIT_RATIO=""               # e.g. 0.5, for the split-here target
 SHOW_DETACHED_WORKTREES=0    # 1 = also list detached-HEAD worktrees
 ```
