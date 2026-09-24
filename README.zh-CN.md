@@ -5,28 +5,28 @@
 </p>
 
 把当前 pane 里的 **Claude Code / Codex / Pi / Grok** 对话 fork 到 Herdr 的另一个
-地方。在 agent 的 pane 里按一个键，从模糊列表里选目的地：
+地方。在 agent 的 pane 里按一个键，从模糊列表里选目的地（界面和 Herdr 本身一样是英文）：
 
 ```
-↔ 在当前 pane 旁边分屏（同一目录）        /Users/mack/code/personal/hugo-theme-kami
+↔ split next to this pane (same directory) /Users/mack/code/personal/hugo-theme-kami
 1. blog                                     ~/code/personal/blog
-  └ ＋ 新建 worktree                        blog · 输入分支名
+  └ ＋ new worktree                         blog · enter a branch name
 2. pi-language-tutor                        ~/code/personal/pi-extensions/pi-language-tutor
-  └ ＋ 新建 worktree
+  └ ＋ new worktree
 5. kami                                     ~/code/personal/hugo-theme-kami
 6. herdr                                    ~/code/personal/hugo-theme-kami
   └ 7. test                                 ~/.herdr/worktrees/hugo-theme-kami/test
-  └ feat/x  ·未打开                         ~/.herdr/worktrees/hugo-theme-kami/feat-x
-  └ ＋ 新建 worktree                        hugo-theme-kami · 输入分支名
+  └ feat/x  · not open                      ~/.herdr/worktrees/hugo-theme-kami/feat-x
+  └ ＋ new worktree                         hugo-theme-kami · enter a branch name
 ```
 
-- **在当前 pane 旁边分屏** — 目录不变，在旁边开一个 pane，适合并排开一个分支对话
+- **split next to this pane** — 目录不变，在旁边开一个 pane，适合并排开一个分支对话
 - **已打开的 workspace** — 在那个 workspace 里开新 tab
 - **同一仓库里还没打开的 worktree** — 先把它作为 workspace 打开
-- **＋ 新建 worktree** — 新建分支和 git worktree，再 fork 进去
+- **＋ new worktree** — 新建分支和 git worktree，再 fork 进去
 
 列表按 git 仓库分组：主检出 workspace 在顶层，同仓库的 worktree（不管开没开）
-缩进挂在下面，每个仓库末尾一个「新建 worktree」。源 pane 所在的仓库一定会出现，
+缩进挂在下面，每个仓库末尾一个「new worktree」。源 pane 所在的仓库一定会出现，
 即使它一个 workspace 都没开。
 
 ## fork 是什么意思
@@ -82,9 +82,8 @@ Herdr 的 action 菜单里也能找到这个 action。
 每次运行都会 source：
 
 ```bash
-UI_LANG=""                   # "en" 或 "zh"；留空跟随 $LANG
 NOTE_ON_FORK=1               # 0 = 不发「工作目录已切换」那句说明
-NOTE_TEMPLATE="…"            # 自定义说明（默认英文，不随 UI_LANG 变）；{src_cwd} 和 {dst_cwd} 会被替换
+NOTE_TEMPLATE="…"            # 自定义说明；{src_cwd} 和 {dst_cwd} 会被替换
 SPLIT_RATIO=""               # 例如 0.5，用于「分屏」目标
 SHOW_DETACHED_WORKTREES=0    # 1 = 也列出 detached HEAD 的 worktree
 STARTUP_PROMPT_TIMEOUT_MS=300000  # 等你处理启动提示的最长时间

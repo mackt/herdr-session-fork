@@ -16,7 +16,7 @@ src_pane="${HERDR_PANE_ID:-}"
 [[ -n "$src_pane" ]] || src_pane="$("$HERDR" api snapshot 2>/dev/null | jq -r '.result.snapshot.focused_pane_id // empty')"
 [[ -n "$src_pane" ]] || die "$L_ERR_NO_PANE"
 
-pane="$(pane_info "$src_pane")" || die "herdr pane get $src_pane 失败"
+pane="$(pane_info "$src_pane")" || die "herdr pane get $src_pane failed"
 kind="$(jq -r '.agent // empty' <<<"$pane")"
 sid="$(jq -r '.agent_session.value // empty' <<<"$pane")"
 src_cwd="$(jq -r '.foreground_cwd // .cwd // empty' <<<"$pane")"

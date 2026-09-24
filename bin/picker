@@ -21,7 +21,7 @@ SF_TITLE="${SF_TITLE:-}"
 #   new   → create a worktree in a repo       target = repo root
 # Workspaces are grouped per git repo: main-checkout workspaces on top, the
 # repo's linked worktrees (open or not) indented beneath, then "new worktree".
-snap="$("$HERDR" api snapshot 2>/dev/null)" || die "herdr api snapshot 失败"
+snap="$("$HERDR" api snapshot 2>/dev/null)" || die "herdr api snapshot failed"
 
 # workspace → its directory: the worktree checkout it was opened on when known,
 # otherwise the most common pane cwd (a stray pane that cd'ed away must not win)
@@ -140,45 +140,45 @@ case "$kind" in
     fi
     args=(pane split --pane "$SF_SRC_PANE" --direction "$dir" --cwd "$SF_SRC_CWD" --focus)
     [[ -n "$SPLIT_RATIO" ]] && args+=(--ratio "$SPLIT_RATIO")
-    out="$(herdr_json "${args[@]}")" || die "pane split 失败: $out"
+    out="$(herdr_json "${args[@]}")" || die "pane split failed: $out"
     dst_pane="$(jq -r '.result.pane.pane_id // empty' <<<"$out")"
     dst_cwd="$SF_SRC_CWD"
     ;;
   ws)
     dst_cwd="$(cut -f5 <<<"$choice")"
     [[ -n "$dst_cwd" ]] || dst_cwd="$SF_SRC_CWD"
-    out="$(herdr_json tab create --workspace "$target" --cwd "$dst_cwd" --focus)" || die "tab create 失败: $out"
+    out="$(herdr_json tab create --workspace "$target" --cwd "$dst_cwd" --focus)" || die "tab create failed: $out"
     dst_pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"
-    [[ -n "$dst_pane" ]] || dst_pane="$(find_shell_pane_in_workspace "$target" 15)" || die "在 workspace $target 里没找到空闲 shell pane"
+    [[ -n "$dst_pane" ]] || dst_pane="$(find_shell_pane_in_workspace "$target" 15)" || die "no pane at a shell prompt in workspace $target"
     ;;
   wt)
     dst_cwd="$target"
-    out="$(herdr_json worktree open --cwd "$SF_SRC_CWD" --path "$target" --focus)" || die "worktree open 失败: $out"
+    out="$(herdr_json worktree open --cwd "$SF_SRC_CWD" --path "$target" --focus)" || die "worktree open failed: $out"
     dst_pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"
     if [[ -z "$dst_pane" ]]; then
       ws_id="$(jq -r '.result.workspace.workspace_id // empty' <<<"$out")"
-      [[ -n "$ws_id" ]] || die "worktree open 没有返回 workspace: $out"
-      dst_pane="$(find_shell_pane_in_workspace "$ws_id" 20)" || die "workspace $ws_id 里没找到空闲 shell pane"
+      [[ -n "$ws_id" ]] || die "worktree open returned no workspace: $out"
+      dst_pane="$(find_shell_pane_in_workspace "$ws_id" 20)" || die "no pane at a shell prompt in workspace $ws_id"
     fi
     ;;
   new)
     printf "\n$L_ASK_BRANCH" "$target"
     read -r branch
     [[ -n "$branch" ]] || { log "new worktree cancelled"; exit 0; }
-    out="$(herdr_json worktree create --cwd "$target" --branch "$branch" --focus)" || die "worktree create 失败: $out"
+    out="$(herdr_json worktree create --cwd "$target" --branch "$branch" --focus)" || die "worktree create failed: $out"
     dst_pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"
     dst_cwd="$(jq -r '.result.worktree.path // .result.root_pane.cwd // empty' <<<"$out")"
-    [[ -n "$dst_pane" && -n "$dst_cwd" ]] || die "worktree create 返回缺少 pane/path: $out"
+    [[ -n "$dst_pane" && -n "$dst_cwd" ]] || die "worktree create returned no pane/path: $out"
     ;;
-  *) die "未知目标类型 $kind" ;;
+  *) die "unknown target kind $kind" ;;
 esac
 
 log "destination pane=$dst_pane cwd=$dst_cwd"
 
 # ---- fork -------------------------------------------------------------------
-name="$(alloc_agent_name)" || die "无法分配 agent 名称"
+name="$(alloc_agent_name)" || die "could not allocate an agent name"
 printf "\n$L_STARTING\n" "$SF_KIND" "${SF_SID:0:8}" "$dst_pane"
-start_forked_agent "$dst_pane" "$SF_KIND" "$SF_SID" "$name" "$dst_cwd" || die "agent start 失败（pane $dst_pane 保留，可手动处理）"
+start_forked_agent "$dst_pane" "$SF_KIND" "$SF_SID" "$name" "$dst_cwd" || die "agent start failed (pane $dst_pane left open for inspection)"
 
 if [[ "$NOTE_ON_FORK" == 1 && "$dst_cwd" != "$SF_SRC_CWD" ]]; then
   note="$(render_note "$SF_SRC_CWD" "$dst_cwd")"
