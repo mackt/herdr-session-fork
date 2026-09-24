@@ -8,7 +8,7 @@
 地方。在 agent 的 pane 里按一个键，从模糊列表里选目的地：
 
 ```
-↔ 当前 workspace 分屏                       /Users/mack/code/personal/hugo-theme-kami
+↔ 在当前 pane 旁边分屏（同一目录）        /Users/mack/code/personal/hugo-theme-kami
 1. blog                                     ~/code/personal/blog
   └ ＋ 新建 worktree                        blog · 输入分支名
 2. pi-language-tutor                        ~/code/personal/pi-extensions/pi-language-tutor
@@ -20,7 +20,7 @@
   └ ＋ 新建 worktree                        hugo-theme-kami · 输入分支名
 ```
 
-- **当前 workspace 分屏** — 在旁边开一个 pane，目录不变
+- **在当前 pane 旁边分屏** — 目录不变，在旁边开一个 pane，适合并排开一个分支对话
 - **已打开的 workspace** — 在那个 workspace 里开新 tab
 - **同一仓库里还没打开的 worktree** — 先把它作为 workspace 打开
 - **＋ 新建 worktree** — 新建分支和 git worktree，再 fork 进去

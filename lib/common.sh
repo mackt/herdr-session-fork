@@ -26,7 +26,7 @@ if [[ -z "$UI_LANG" ]]; then
   case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in zh*) UI_LANG=zh ;; *) UI_LANG=en ;; esac
 fi
 if [[ "$UI_LANG" == zh ]]; then
-  L_SPLIT_HERE='↔ 当前 workspace 分屏'
+  L_SPLIT_HERE='↔ 在当前 pane 旁边分屏（同一目录）'
   L_NEW_WORKTREE='＋ 新建 worktree'
   L_NEW_HINT='输入分支名'
   L_MAIN_CLOSED='·主检出，未打开'
@@ -45,7 +45,7 @@ if [[ "$UI_LANG" == zh ]]; then
   L_TRUST_BODY='%s 第一次进入 %s，请在 pane 里确认信任该目录'
   L_BLOCKED_BODY='%s 启动时停在了一个提示上，请到 pane %s 处理'
 else
-  L_SPLIT_HERE='↔ split in current workspace'
+  L_SPLIT_HERE='↔ split next to this pane (same directory)'
   L_NEW_WORKTREE='＋ new worktree'
   L_NEW_HINT='enter a branch name'
   L_MAIN_CLOSED='· main checkout, not open'

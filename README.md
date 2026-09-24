@@ -9,7 +9,7 @@ into somewhere else in Herdr, picked from a fuzzy list. Press one key in the
 agent's pane and choose where the copy should live:
 
 ```
-↔ split in current workspace                /Users/mack/code/personal/hugo-theme-kami
+↔ split next to this pane (same directory) /Users/mack/code/personal/hugo-theme-kami
 1. blog                                     ~/code/personal/blog
   └ ＋ new worktree                         blog · enter a branch name
 2. pi-language-tutor                        ~/code/personal/pi-extensions/pi-language-tutor
@@ -21,7 +21,7 @@ agent's pane and choose where the copy should live:
   └ ＋ new worktree                         hugo-theme-kami · enter a branch name
 ```
 
-- **split in current workspace** — a sibling pane, same directory
+- **split next to this pane** — a sibling pane in the same directory, for a side-by-side branch of the conversation
 - **an open workspace** — a new tab there
 - **a worktree of the same repo that is not open yet** — opened as a workspace first
 - **＋ new worktree** — creates a git worktree on a new branch, then forks into it
